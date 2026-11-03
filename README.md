@@ -126,6 +126,25 @@ O projeto segue as práticas modernas do **Next.js (App Router)**:
 
 ## 🚀 6. Como Executar Localmente
 
+### 🐳 Opção rápida: tudo em Docker
+
+Só é preciso ter Docker + Docker Compose. Não é necessário Node.js nem `.env`:
+
+```bash
+docker compose up -d --build
+docker compose logs -f app   # acompanhe até aparecer "Ready"
+```
+
+Na primeira subida o container `app` instala as dependências, inicializa o replica set do Mongo, aplica o schema do Prisma, cria o bucket do MinIO e executa o seed (somente se o banco estiver vazio). Depois disso:
+
+- Aplicação: http://localhost:3000 (com hot reload do código local)
+- Console do MinIO: http://localhost:9001 (`minioadmin` / `minioadmin`)
+- MongoDB: `mongodb://localhost:27017/sinaes_db_local?replicaSet=rs0`
+
+Variáveis opcionais (`BETTER_AUTH_SECRET`, `CLOUDINARY_*`, `RESEND_API_KEY`, `SEED_ON_EMPTY_DB`) podem ser definidas num `.env` na raiz; o `DATABASE_URL` do `.env` é ignorado pelo container. Para parar: `docker compose down` (adicione `-v` para apagar os dados).
+
+As seções abaixo descrevem a execução com Node.js instalado na máquina.
+
 ### 🔧 Pré-requisitos
 
 - [Node.js (v18+)](https://nodejs.org/)

@@ -1,13 +1,15 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function sendResetPasswordEmail(to: string, url: string) {
   try {
     if (!process.env.RESEND_API_KEY) {
       console.error('RESEND_API_KEY não está definida!');
       return;
     }
+
+    // Instanciado sob demanda: o construtor lança erro sem API key, o que
+    // derrubaria qualquer módulo que importe este arquivo (ex.: lib/auth).
+    const resend = new Resend(process.env.RESEND_API_KEY);
 
     const resetPasswordRecipient =
       process.env.NODE_ENV === 'production'
