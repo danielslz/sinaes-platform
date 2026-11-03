@@ -1,0 +1,23 @@
+# Imagem de desenvolvimento: o código é montado via bind mount pelo docker-compose,
+# então aqui só preparamos o runtime (Node + OpenSSL exigido pelo Prisma).
+FROM node:22-bookworm-slim
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Diretórios que viram volumes nomeados precisam existir com dono "node",
+# senão o Docker os cria como root e o npm/next não conseguem escrever.
+RUN mkdir -p /app/node_modules /app/.next && chown -R node:node /app
+
+COPY --chown=node:node docker/dev-entrypoint.sh /usr/local/bin/dev-entrypoint.sh
+
+ENV NEXT_TELEMETRY_DISABLED=1
+
+USER node
+
+EXPOSE 3000
+
+ENTRYPOINT ["sh", "/usr/local/bin/dev-entrypoint.sh"]

@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   mongo:
     image: mongo:latest
@@ -7,12 +6,30 @@ services:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
-    command: mongod --replSet rs0 --bind_ip localhost,mongo
+    # --quiet suprime os logs de cada conexão (ex.: as do healthcheck).
+    command: mongod --replSet rs0 --bind_ip_all --quiet
+    # O healthcheck também inicializa o replica set (exigido pelo Prisma) na primeira subida.
+    # O membro é registrado como localhost:27017 para continuar funcionando a partir do host;
+    # o container "app" conecta com directConnection=true.
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "try { rs.status().ok } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27017' }] }).ok }"
+      # Checa a cada 2s durante a subida e depois só a cada 30s.
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+      start_interval: 2s
     networks:
       - app-net
 
   minio:
-    image: minio/minio
+    # minio/minio foi removida do Docker Hub (set/2026); a Chainguard mantém uma build gratuita.
+    image: cgr.dev/chainguard/minio:latest
     container_name: minio_local
     command: server /data --console-address ":9001"
     environment:
@@ -25,9 +42,51 @@ services:
       - minio-data:/data
     networks:
       - app-net
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: sinaes_app
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      # Valores fixos para o ambiente Docker (não usam o DATABASE_URL do .env do host).
+      DATABASE_URL: mongodb://mongo:27017/sinaes_db_local?directConnection=true
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_BUCKET: sinaes-files
+      BETTER_AUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_BASE_URL: http://localhost:3000
+      # Opcionais: lidos do .env (se existir) ou usam o padrão de desenvolvimento.
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-only-secret-change-me-0123456789abcdef}
+      CLOUDINARY_URL: ${CLOUDINARY_URL:-}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      # Popula o banco automaticamente apenas quando ele estiver vazio.
+      SEED_ON_EMPTY_DB: ${SEED_ON_EMPTY_DB:-true}
+    volumes:
+      - .:/app:z
+      # node_modules e .next ficam em volumes para não conflitar com o host.
+      - node-modules:/app/node_modules
+      - next-cache:/app/.next
+    depends_on:
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    networks:
+      - app-net
+
 volumes:
   mongo-data:
   minio-data:
+  node-modules:
+  next-cache:
 
 networks:
   app-net:
